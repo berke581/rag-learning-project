@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "rag-learning-project"
+version = "0.1.0"
+description = "A hands-on learning project to build a RAG system from scratch"
+authors = ["Berke Yoncaci <berke5sekiz1@gmail.com>"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+requests = "^2.31.0"
+python-dotenv = "^1.0.0"
+sentence-transformers = "^2.2.2"
+chromadb = "^1.0.0"
+rank-bm25 = "^0.2.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+
+[tool.poetry.scripts]
+rag-fetch = "src.ingestion.fetch:main"
+rag-process = "src.indexing.process:main"
+rag-ingest = "src.ingestion.main:main"
+rag-query = "src.retrieval.main:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
