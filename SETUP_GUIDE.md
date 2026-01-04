@@ -95,19 +95,15 @@ poetry run pytest -v
 ## Running the Pipeline
 
 ```bash
-# Fetch articles from Hacker News
-poetry run rag-fetch --limit 50
+# Option A: Step by step
+poetry run rag-fetch --limit 50   # Fetch articles
+poetry run rag-process             # Build index
 
-# Build search index
-poetry run rag-process
+# Option B: Combined (same as Option A)
+poetry run rag-ingest              # Fetch + build index
 
 # Query the system
 poetry run rag-query
-```
-
-Or run the complete pipeline:
-```bash
-poetry run rag-ingest
 ```
 
 ## Project Structure
@@ -191,4 +187,4 @@ python -m src.retrieval.main
 1. Run `poetry run rag-fetch --limit 50` to fetch sample articles
 2. Run `poetry run rag-process` to build the index
 3. Run `poetry run rag-query` to search
-4. Read ROADMAP.md for implementation details
+4. Read README.md for implementation details and roadmap

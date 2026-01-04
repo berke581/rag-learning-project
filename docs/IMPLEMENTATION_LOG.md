@@ -27,20 +27,15 @@ rag-learning-project/
 
 #### 2. Documentation Files
 
-**ROADMAP.md**
-- **Purpose**: Complete step-by-step guide for building the RAG system
-- **Content**: 6 phases from data ingestion to production enhancements
-- **Why**: Provides a clear learning path with specific tasks, technology options, and decision points at each phase
-
 **README.md**
-- **Purpose**: Project overview and quick start guide
-- **Content**: Project goals, directory structure, code examples in Python and Node.js
-- **Why**: Serves as the entry point for understanding what the project does and how to get started quickly
+- **Purpose**: Project overview, quick start, and implementation roadmap
+- **Content**: Project status, CLI commands, architecture diagram, phase details
+- **Why**: Single source for understanding project structure and progress
 
 **SETUP_GUIDE.md**
 - **Purpose**: Detailed environment setup instructions
-- **Content**: Step-by-step setup for both Python and Node.js, dependency installation, API key configuration, troubleshooting
-- **Why**: Removes setup friction, provides clear instructions for both tech stacks, includes verification steps
+- **Content**: Poetry setup, dependency installation, API key configuration, troubleshooting
+- **Why**: Removes setup friction, provides clear instructions with verification steps
 
 **CLAUDE.md**
 - **Purpose**: Guidance for Claude Code when working in this repository
@@ -64,13 +59,13 @@ rag-learning-project/
 
 ### Design Decisions
 
-#### 1. Tech Stack Agnostic Approach
-The project structure and documentation support both Python and Node.js implementations.
+#### 1. Python-First Implementation
+The project is implemented in Python with Poetry for package management.
 
 **Rationale**:
-- Learners may prefer different languages
-- Core RAG concepts are language-agnostic
-- Easier to compare implementations across languages
+- Better ML ecosystem (Sentence-Transformers, ChromaDB)
+- Simpler syntax for learning RAG concepts
+- Strong community support for RAG tooling
 
 #### 2. Phased Development Approach
 Structured as 6 sequential phases rather than a monolithic implementation.
@@ -82,11 +77,19 @@ Structured as 6 sequential phases rather than a monolithic implementation.
 - Matches natural learning progression from simple to complex
 
 #### 3. Component Separation
-Each major function (ingestion, embedding, storage, retrieval, LLM) has its own directory.
+Each major function (ingestion, indexing, embedding, storage, retrieval, LLM) has its own directory.
+
+**Module Structure**:
+- **ingestion/**: Fetch data from external sources (Hacker News API)
+- **indexing/**: Build search index (chunking, embedding, storage)
+- **embeddings/**: Embedding generation library
+- **vector_db/**: Vector storage library (ChromaDB)
+- **retrieval/**: Search and ranking (hybrid BM25 + vector)
+- **llm/**: LLM integration (Phase 4)
 
 **Rationale**:
 - **Testability**: Each component can be tested independently
-- **Flexibility**: Easy to swap implementations (e.g., different vector databases)
+- **Flexibility**: Easy to swap implementations (e.g., different embedding models)
 - **Clarity**: Clear separation of concerns aids understanding
 - **Scalability**: Components can be optimized or replaced individually
 
@@ -118,18 +121,19 @@ All configuration through environment variables.
 - **UI**: Start with CLI, move to Streamlit
 
 #### For Experienced Developers
-- **Language**: Your preference (Python or Node.js)
-- **Embeddings**: OpenAI text-embedding-3-small (higher quality)
-- **Vector DB**: Pinecone or Qdrant (production-ready)
-- **LLM**: Claude Sonnet or GPT-4 (best quality)
-- **UI**: React/Next.js with FastAPI backend
+- **Language**: Python with Poetry
+- **Embeddings**: OpenAI text-embedding-3-small (higher quality) or Cohere
+- **Vector DB**: Pinecone or Qdrant (production-ready, cloud-hosted)
+- **LLM**: Claude Opus or GPT-4 (best quality)
+- **UI**: Streamlit, Gradio, or custom React frontend
 
 ### Next Steps for Developers
 
-1. **Setup Environment**: Follow SETUP_GUIDE.md for your chosen stack
-2. **Read ROADMAP.md**: Understand Phase 1 tasks
-3. **Start Coding**: Begin with `src/ingestion/api_client.py` or `.js`
-4. **Document Learning**: Add notes to this log as you progress
+1. **Setup Environment**: Follow SETUP_GUIDE.md
+2. **Review README.md**: Understand completed phases and next steps
+3. **Run Pipeline**: Try `rag-fetch` → `rag-process` → `rag-query`
+4. **Explore Code**: Start with Phase 4 (LLM integration) or enhancements
+5. **Document Learning**: Add notes to this log as you progress
 
 ### Common Patterns to Follow
 
@@ -158,15 +162,15 @@ As you build, document here:
 ## Phase 1 Implementation - 2025-12-30
 
 ### Overview
-Successfully implemented the data ingestion pipeline with API fetching, data preprocessing, and text chunking.
+Implemented data ingestion pipeline with Hacker News API fetching, data preprocessing, and text chunking.
 
 ### What Was Built
 
 #### 1. Project Configuration
 **File**: `pyproject.toml`
-- Used **Poetry** for package management instead of pip/requirements.txt
-- Dependencies: requests, python-dotenv, pytest
-- Created Poetry script entry point: `rag-ingest`
+- Used **Poetry** for package management
+- Dependencies: requests, python-dotenv, sentence-transformers, chromadb, rank-bm25, pytest
+- Created Poetry script entry points: `rag-fetch`, `rag-process`, `rag-query`, `rag-ingest`
 - **Why Poetry**: Modern dependency management, better lock file handling, integrated tooling
 
 #### 2. Configuration Module
@@ -178,10 +182,12 @@ Successfully implemented the data ingestion pipeline with API fetching, data pre
 
 #### 3. Data Models
 **File**: `src/ingestion/models.py`
-- **Post**: Represents API response from JSONPlaceholder
-  - Fields: id, user_id, title, body
+- **Article**: Represents Hacker News article
+  - Fields: id, title, text, author, score, time, url
   - Factory method: `from_api_response()`
   - Conversion method: `to_document()`
+  - JSON serialization: `to_dict()`, `from_dict()`, `save_to_json()`, `load_from_json()`
+  - Article type detection: `article_type` property (ask_hn, show_hn, tell_hn, article)
 - **Document**: Intermediate format for processing
   - Fields: id, content, metadata
   - Implements `__len__` for content length
@@ -189,18 +195,19 @@ Successfully implemented the data ingestion pipeline with API fetching, data pre
   - Fields: id, content, metadata
   - Implements `__len__` and `__str__`
 
-**Design Decision**: Three-stage model (Post → Document → Chunk) separates concerns and allows flexibility in data sources.
+**Design Decision**: Three-stage model (Article → Document → Chunk) separates concerns and allows flexibility in data sources.
 
-#### 4. API Client
-**File**: `src/ingestion/api_client.py`
-- Fetches data from JSONPlaceholder API
+#### 4. Hacker News API Client
+**File**: `src/ingestion/hn_client.py`
+- Fetches articles from Hacker News Firebase API
 - **Features**:
   - Exponential backoff retry logic (3 attempts)
   - Configurable timeout (default: 30s)
-  - Comprehensive error handling
-  - Support for fetching all posts or single post by ID
-- **Custom Exception**: APIClientError for clear error messages
-- **Why JSONPlaceholder**: Free, no authentication, reliable, 100 posts perfect for learning
+  - Filters for text-only stories (Ask HN, Show HN)
+  - Rate limiting (polite to API)
+  - Support for fetching story IDs and individual items
+- **Custom Exception**: HNClientError for clear error messages
+- **Why Hacker News**: Real-world data, text-rich discussions, free API, no auth required
 
 #### 5. Preprocessor
 **File**: `src/ingestion/preprocessor.py`
@@ -214,19 +221,25 @@ Successfully implemented the data ingestion pipeline with API fetching, data pre
 - **Metadata Preservation**: All parent document metadata carried to chunks
 - **Chunk Metadata**: parent_doc_id, chunk_index, total_chunks
 
-#### 6. CLI Entry Point
-**File**: `src/ingestion/main.py`
-- Three-step pipeline: Fetch → Convert → Chunk
-- Displays statistics (count, average chunk size)
-- Shows sample chunks for verification
-- **Fixed Issue**: Replaced Unicode checkmarks with [OK]/[ERROR] for Windows compatibility
+#### 6. CLI Entry Points
+**Files**:
+- `src/ingestion/fetch.py` → **rag-fetch**: Fetch articles from HN, save to JSON
+- `src/indexing/process.py` → **rag-process**: Build search index (chunk → embed → store)
+- `src/ingestion/main.py` → **rag-ingest**: Convenience wrapper (fetch + process)
+- `src/retrieval/main.py` → **rag-query**: Query the RAG system
+- Displays statistics and sample output at each stage
 
 #### 7. Comprehensive Test Suite
 **Files**: `tests/test_*.py`
-- **27 unit tests total**:
-  - 7 tests for API client (mocking, retries, error handling)
-  - 10 tests for data models (creation, conversion, validation)
+- **117 unit tests total**:
+  - 16 tests for HN client (mocking, retries, error handling, filtering)
+  - 24 tests for data models (Article, Document, Chunk)
   - 10 tests for preprocessor (chunking, overlap, metadata)
+  - 9 tests for embedder
+  - 10 tests for vector store
+  - 15 tests for BM25 index
+  - 18 tests for hybrid retriever
+  - 15 tests for retrieval module
 - **All tests passing**
 - Used mocking for API tests to avoid external dependencies
 
@@ -234,8 +247,8 @@ Successfully implemented the data ingestion pipeline with API fetching, data pre
 
 #### Data Structure & Abstraction Layers
 
-Chose three-tier model (Post → Document → Chunk):
-- **Post**: API-specific structure
+Chose three-tier model (Article → Document → Chunk):
+- **Article**: API-specific structure (Hacker News)
 - **Document**: Normalized format (allows different API sources later)
 - **Chunk**: Vector-ready format with metadata
 
@@ -243,8 +256,8 @@ Chose three-tier model (Post → Document → Chunk):
 ```
 [Data Source]    [Source Model]    [Document]    [Chunk]    [Embedding]    [VectorDB]
       |               |                |            |            |             |
-  API Client    e.g. Post         Generic      Generic      Generic       Generic
-                Story, etc.      Interface    Interface    Interface     Interface
+  HN API Client    Article          Generic      Generic      Generic       Generic
+                                   Interface    Interface    Interface     Interface
 ```
 
 **Key Abstraction: The Document Model**
@@ -315,29 +328,25 @@ This separation allows easy addition of other data sources in future.
 ### Test Results
 
 ```
-27 passed in 7.25s
+117 passed
 
-Pipeline Output:
-- Successfully fetched 100 posts
-- Created 100 documents
-- Created 100 chunks
-- Avg chunk size: 201 characters
+Pipeline Output (rag-ingest):
+- Fetched 100+ HN articles with text content
+- Created chunks with 500 char size, 50 char overlap
+- Generated 384-dimensional embeddings
+- Stored in ChromaDB + BM25 index
+- Query retrieval with hybrid search working
 ```
 
 ### Files Created
-1. `pyproject.toml` - Poetry configuration
-2. `src/__init__.py` - Package initialization
-3. `src/ingestion/__init__.py` - Module exports
-4. `src/ingestion/config.py` - Configuration
-5. `src/ingestion/models.py` - Data models
-6. `src/ingestion/api_client.py` - API fetching
-7. `src/ingestion/preprocessor.py` - Text processing
-8. `src/ingestion/main.py` - CLI entry point
-9. `tests/__init__.py` - Test package
-10. `tests/test_api_client.py` - API tests
-11. `tests/test_models.py` - Model tests
-12. `tests/test_preprocessor.py` - Preprocessor tests
-13. `.env` - Environment configuration (from .env.example)
+1. `pyproject.toml` - Poetry configuration with all CLI scripts
+2. `src/ingestion/` - HN client, models, preprocessor, fetch/ingest CLIs
+3. `src/indexing/` - Process CLI for building index
+4. `src/embeddings/` - Embedder with Sentence-Transformers
+5. `src/vector_db/` - ChromaDB wrapper
+6. `src/retrieval/` - Hybrid retriever (BM25 + vector), query CLI
+7. `tests/` - Comprehensive test suite (117 tests)
+8. `.env` - Environment configuration (from .env.example)
 
 ### Next Steps for Phase 2
 - Choose embedding model (Sentence-Transformers recommended)
@@ -778,138 +787,15 @@ poetry run rag-query "your question here"
 ```
 
 ### Current Database State
-- **100 documents** from JSONPlaceholder API
-- Lorem ipsum-like Latin text (low similarity scores expected)
-- To test with real data, re-run embedding pipeline with different source
+- **Articles from Hacker News** (Ask HN, Show HN posts)
+- Real-world technical discussions and questions
+- High-quality matches for programming and tech queries
 
 ### Next Steps for Phase 4
 - Integrate LLM (Claude API) for response generation
 - Design RAG prompt template with context injection
 - Add citation support in responses
 - Implement streaming responses
-
----
-
-## Pipeline Refactoring - 2026-01-04
-
-### Overview
-Major refactoring to improve code organization, remove deprecated code, and split the monolithic ingestion pipeline into modular stages.
-
-### Changes Made
-
-#### 1. Removed JSONPlaceholder Code
-The original mock API (JSONPlaceholder) was removed in favor of real Hacker News data:
-- **Deleted**: `src/ingestion/api_client.py` - JSONPlaceholder client
-- **Deleted**: `tests/test_api_client.py` - Related tests
-- **Updated**: `src/ingestion/config.py` - Removed API settings, kept chunking config
-
-#### 2. Unified Data Models
-Merged and simplified data models:
-- **Before**: `Post` (JSONPlaceholder), `Story` (HN) in separate files
-- **After**: Single `Article` class in `src/ingestion/models.py`
-- **Deleted**: `src/ingestion/hn_models.py` (merged into models.py)
-- **Added**: JSON serialization (`to_dict`, `from_dict`, `save_to_json`, `load_from_json`)
-
-#### 3. Split Pipeline Architecture
-
-**Before (Monolithic):**
-```
-rag-ingest → fetch → chunk → embed → store → BM25 (all in one)
-```
-
-**After (Modular):**
-```
-rag-fetch   → Fetch articles from HN → Save to data/raw/articles.json
-rag-process → Load JSON → chunk → embed → store → BM25 index
-rag-ingest  → Convenience wrapper (calls fetch + process)
-rag-query   → Query the RAG system
-```
-
-**New Module Structure:**
-```
-src/
-├── ingestion/     # rag-fetch: bring data in from external sources
-│   ├── fetch.py   # CLI for fetching articles
-│   ├── main.py    # Convenience wrapper (fetch + process)
-│   ├── models.py  # Article, Document, Chunk
-│   ├── hn_client.py
-│   └── preprocessor.py
-├── indexing/      # rag-process: build searchable index
-│   ├── __init__.py
-│   └── process.py # CLI for building index
-├── retrieval/     # rag-query: search the index
-├── embeddings/    # Library: embedding generation
-└── vector_db/     # Library: vector storage
-```
-
-#### 4. Architecture Options Considered
-
-| Option | Description | Decision |
-|--------|-------------|----------|
-| **A: Monolithic** | One command does everything | Original design |
-| **B: Split Fetch/Process** | Separate I/O from CPU work | **Chosen** |
-| **C: Granular Stages** | Separate CLI per stage | Too complex |
-
-**Why Option B:**
-- Separates I/O-bound work (API fetching) from CPU-bound work (embedding)
-- Can re-process with different settings without re-fetching
-- Intermediate JSON allows inspection and debugging
-- Good balance of flexibility and simplicity
-
-#### 5. CLI Commands
-
-| Command | Entry Point | Purpose |
-|---------|-------------|---------|
-| `rag-fetch` | `src.ingestion.fetch:main` | Fetch articles from HN, save to JSON |
-| `rag-process` | `src.indexing.process:main` | Build index from JSON |
-| `rag-ingest` | `src.ingestion.main:main` | Convenience: fetch + process |
-| `rag-query` | `src.retrieval.main:main` | Query the RAG system |
-
-**Usage:**
-```bash
-# Two-stage workflow (recommended for development)
-poetry run rag-fetch --limit 100
-poetry run rag-process
-
-# One-command workflow
-poetry run rag-ingest 100
-
-# Query
-poetry run rag-query "your question"
-```
-
-#### 6. Data Directory Structure
-
-```
-data/
-├── raw/              # Fetched articles (articles.json)
-├── chroma_db/        # Vector database
-└── bm25_index.pkl    # BM25 index
-```
-
-### Files Changed Summary
-
-| File | Action |
-|------|--------|
-| `src/ingestion/api_client.py` | **Deleted** |
-| `src/ingestion/hn_models.py` | **Deleted** (merged) |
-| `tests/test_api_client.py` | **Deleted** |
-| `tests/test_hn_models.py` | **Deleted** (merged) |
-| `src/ingestion/fetch.py` | **Created** |
-| `src/indexing/__init__.py` | **Created** |
-| `src/indexing/process.py` | **Created** |
-| `src/ingestion/models.py` | Merged Article, added serialization |
-| `src/ingestion/config.py` | Removed API settings |
-| `src/ingestion/main.py` | Refactored as wrapper |
-| `src/ingestion/hn_client.py` | Updated to use Article |
-| `tests/test_models.py` | Merged Article tests |
-| `tests/test_hn_client.py` | Updated imports |
-| `pyproject.toml` | Added new CLI scripts |
-
-### Test Results
-```
-117 tests passed
-```
 
 ---
 
